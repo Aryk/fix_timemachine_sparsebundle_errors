@@ -49,7 +49,7 @@ def monitor_fsck(first_time=true, &on_fail)
   success   = last_line =~ /repaired successfully/i
   fail      = last_line =~ /not be repaired/i
 
-  puts "Checking #{filename} until it is either a successful or failure." if first_time
+  puts "Checking #{filename} until it is either successful or unsuccessful." if first_time
   until success || fail
     sleep(1)
     monitor_fsck(false, &on_fail)
@@ -58,6 +58,7 @@ def monitor_fsck(first_time=true, &on_fail)
   on_fail.call if fail
 end
 
+if false
 sudo(%{chflags -R nouchg "#{sparse_bundle_path}"})
 disk_id = sudo(%{hdiutil attach -nomount -noverify -noautofsck "#{sparse_bundle_path}"})[/dev\/disk(\d)s2/, 1].to_i
 
@@ -69,13 +70,13 @@ monitor_fsck do
     sudo("fsck_hfs -drfy /dev/disk#{disk_id}s2")
   end
 end
+end
 
-return
 
 puts "Modifying #{plist_filename_path}"
 plist = File.read(plist_filename_path)
 plist.gsub!(Regexp.new("\n\t*<key>RecoveryBackupDeclinedDate</key>\n\t*<date>[\\w\\-:]+</date>"), "")
-plist.gsub!(Regexp.new("(<key>VerificationState</key>\n\t*<integer>)\d+(</integer>)"), "\\10\\2")
+plist.gsub!(Regexp.new("(<key>VerificationState</key>\n\t*<integer>)\\d+(</integer>)"), "\\10\\2")
 File.open(plist_filename_path, "w") { |f| f << plist }
 
 puts "Your Done!"
