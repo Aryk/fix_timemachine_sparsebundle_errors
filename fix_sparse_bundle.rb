@@ -45,22 +45,22 @@ class MonitorFsck
 
   FSCK_HFS_LOG = "/var/log/fsck_hfs.log"
 
-  def self.run(&on_fail)
-    new.run(&on_fail)
+  def self.run(&block)
+    new.run(&block)
   end
 
-  def run(&on_fail)
+  def run
     puts "Checking #{FSCK_HFS_LOG} until it is either successful or unsuccessful."
     sleep(5) # give it a little time for the file to start getting data
 
     success = nil
     while success.nil?
       sleep(1)
-      success = check(&on_fail)
+      success = check
     end
 
     puts(success ? "Success!" : "Fail!")
-    on_fail.call unless success
+    yield unless success
     success
   end
 
