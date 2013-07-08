@@ -41,37 +41,53 @@ def sudo(cmd, *args)
   run_command("sudo #{cmd}", *args)
 end
 
-def monitor_fsck(first_time=true, &on_fail)
-  sleep(5) if first_time # if the command just ran, give it a little time for the file to start getting data
-  filename = "/var/log/fsck_hfs.log"
-  last_line = sudo("tail -n 1 #{filename}", true)
+class MonitorFsck
 
-  success   = last_line =~ /repaired successfully/i
-  fail      = last_line =~ /not be repaired/i
+  FSCK_HFS_LOG = "/var/log/fsck_hfs.log"
 
-  puts "Checking #{filename} until it is either successful or unsuccessful." if first_time
-  until success || fail
-    sleep(1)
-    monitor_fsck(false, &on_fail)
+  def self.run(&on_fail)
+    new.run(&on_fail)
   end
-  puts(success ? "Success!" : "Fail!")
-  on_fail.call if fail
+
+  def run(&on_fail)
+    puts "Checking #{FSCK_HFS_LOG} until it is either successful or unsuccessful."
+    sleep(5) # give it a little time for the file to start getting data
+
+    success = nil
+    while success.nil?
+      sleep(1)
+      success = check(&on_fail)
+    end
+
+    puts(success ? "Success!" : "Fail!")
+    on_fail.call unless success
+    success
+  end
+
+  private
+
+    def check
+      last_line = run_command("tail -n 1 #{FSCK_HFS_LOG}", true)
+
+      if last_line =~ /repaired successfully/i
+        true
+      elsif last_line =~ /not be repaired/i
+        false
+      end
+    end
 end
 
-if false
 sudo(%{chflags -R nouchg "#{sparse_bundle_path}"})
 disk_id = sudo(%{hdiutil attach -nomount -noverify -noautofsck "#{sparse_bundle_path}"})[/dev\/disk(\d)s2/, 1].to_i
 
-monitor_fsck do
+MonitorFsck.run do
   sudo("fsck_hfs -drfy /dev/disk#{disk_id}s2")
-  monitor_fsck do
-    sudo("fsck_hfs -p /dev/disk#{disk_id}s2")
-    monitor_fsck { raise("Tried running #{second_retry}, but it still fails... :(") }
+  MonitorFsck.run do
+    sudo(cmd = "fsck_hfs -p /dev/disk#{disk_id}s2")
+    MonitorFsck.run { raise("Tried running #{cmd}, but it still fails... :(") }
     sudo("fsck_hfs -drfy /dev/disk#{disk_id}s2")
   end
 end
-end
-
 
 puts "Modifying #{plist_filename_path}"
 plist = File.read(plist_filename_path)
